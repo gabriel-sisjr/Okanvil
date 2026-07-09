@@ -1386,6 +1386,7 @@ function Okanvil:BuildInvite()
 			local name, rank, rankIndex, _, class, _, publicnote, officernote, online = GetGuildRosterInfo(i)
 			if name then
 				name = (name:gsub("%-.*$", ""))
+				local classToken = select(11, GetGuildRosterInfo(i))
 				local isAlt = (rankIndex == 4)
 					or (rank and rank:lower():find("alt", 1, true))
 					or (officernote and officernote:lower():match("^.-%s+alt%f[%A]"))
@@ -1394,7 +1395,7 @@ function Okanvil:BuildInvite()
 				if not isAlt and pass then
 					local key = rankIndex or 99
 					if not buckets[key] then buckets[key] = { name = rank or ("Rank " .. key), idx = key, list = {} }; order[#order + 1] = key end
-					table.insert(buckets[key].list, { name = name, class = class, online = online })
+					table.insert(buckets[key].list, { name = name, class = class, classToken = classToken, online = online })
 				end
 			end
 		end
@@ -1439,7 +1440,7 @@ function Okanvil:BuildInvite()
 				r:ClearAllPoints(); r:SetPoint("TOPLEFT", col * COLW, -y); r:SetWidth(COLW - 4); r:SetHeight(18)
 				local inList = I.IsInList(curList, m.name)
 				r.mark:Show(); r.mark:SetVertexColor(inList and C.ok[1] or 0.3, inList and C.ok[2] or 0.3, inList and C.ok[3] or 0.34, 1)
-				local hex = (m.class and CLASS_HEX[m.class]) or "dcddde"
+				local hex = (m.classToken and CLASS_HEX[m.classToken]) or "dcddde"
 				local off = m.online and "" or "  |cff5e6166o|r"
 				r.txt:SetText("|c" .. (inList and "ff" or "aa") .. hex .. m.name .. "|r" .. off)
 				local who = m.name

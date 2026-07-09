@@ -487,7 +487,6 @@ end
 -- build patterns from WoW globals so join/decline detection is locale-safe
 local function mkPat(fmt) local p = (fmt or ""):gsub("[%(%)%.%+%-%*%?%[%]%^%$]", "%%%0"); return (p:gsub("%%s", "(.+)")) end
 local PAT_DECLINE = ERR_INVITE_PLAYER_S and mkPat(ERR_DECLINE_GROUP_S or "%s declines your group invitation.")
-local PAT_GUILD_ONLINE = ERR_FRIEND_ONLINE_SS and mkPat(ERR_FRIEND_ONLINE_SS)
 
 -- Parse the keyword setting into a list. Multiple keywords are allowed, split on
 -- comma/space/semicolon -- e.g. "inv, invite, ginv" all trigger.
@@ -516,6 +515,7 @@ local function keywordInvite(msg, sender, where)
 	local list = keywordList(iv)
 	if #list == 0 then return end
 	if not msgHasKeyword(msg, list) then return end
+	if not canAutoInvite() then return end
 	local clean = (sender:gsub("%-.*$", ""))
 	if inviteOne(clean) then
 		Print("Invited " .. clean .. " (" .. (where or "chat") .. " keyword).")
@@ -565,22 +565,6 @@ ev:SetScript("OnEvent", function(_, event, arg1, arg2)
 				return
 			end
 		end
-		-- auto-invite armed list members when they come online (friend-online line)
-		if iv.autoLoginList ~= "" and PAT_GUILD_ONLINE then
-			local who = m:match(PAT_GUILD_ONLINE)
-			if who then
-				who = (who:gsub("%-.*$", ""))
-				local l = iv.lists[iv.autoLoginList]
-				if l then
-					for _, n in ipairs(l) do
-						if n == who then
-							if inviteOne(who) then Print("Auto-invited " .. who .. " (just logged in).") end
-							break
-						end
-					end
-				end
-			end
-		end
 	end
 end)
 
@@ -625,6 +609,7 @@ gev:SetScript("OnEvent", function()
 	local members = l and l.members
 	if not members or #members == 0 then return end
 	-- build a quick name->online map
+	if SetGuildRosterShowOffline then SetGuildRosterShowOffline(true) end
 	local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
 	local online = {}
 	for i = 1, total do
