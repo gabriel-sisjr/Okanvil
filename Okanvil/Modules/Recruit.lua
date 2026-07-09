@@ -12,6 +12,7 @@
 -- key registered in Okanvil_Plugins / IsModuleEnabled -- NOT a separate addon.
 local ADDON = "Okanvil-Recruit"
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
+local G = Okanvil.Guild
 
 -- ------------------------------------------------------------
 -- Saved-variable defaults -- NO pre-filled text (the user inserts it all).
@@ -97,18 +98,8 @@ local function resolveClass(name)
 			end
 		end
 	end
-	if IsInGuild and IsInGuild() then
-		local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-		for i = 1, total do
-			local gn = GetGuildRosterInfo(i)
-			if gn then
-				gn = strsplit("-", gn)
-				if gn == name then
-					return select(11, GetGuildRosterInfo(i))
-				end
-			end
-		end
-	end
+	local m = G.FindMember(name)
+	if m then return m.classToken end
 	return nil
 end
 
@@ -146,37 +137,15 @@ local function isKnownContact(name)
 			end
 		end
 	end
-	if db.filterGuild and IsInGuild and IsInGuild() then
-		local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-		for i = 1, total do
-			local gn = GetGuildRosterInfo(i)
-			if gn then
-				gn = strsplit("-", gn)
-				if gn == name then
-					return true
-				end
-			end
-		end
+	if db.filterGuild and G.FindMember(name) then
+		return true
 	end
 	return false
 end
 
 -- is this name currently in MY guild? (used to hide the re-invite button)
 local function isInMyGuild(name)
-	if not (IsInGuild and IsInGuild()) then
-		return false
-	end
-	local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-	for i = 1, total do
-		local gn = GetGuildRosterInfo(i)
-		if gn then
-			gn = strsplit("-", gn)
-			if gn == name then
-				return true
-			end
-		end
-	end
-	return false
+	return G.FindMember(name) ~= nil
 end
 
 -- parse guild join/decline system messages to track an invite's outcome

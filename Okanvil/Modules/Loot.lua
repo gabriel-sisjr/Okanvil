@@ -23,6 +23,7 @@
 local Okanvil = Okanvil
 local L = {}
 Okanvil.Loot = L
+local G = Okanvil.Guild
 
 local esc = function(s)
 	if Okanvil.Guild and Okanvil.Guild.esc then return Okanvil.Guild.esc(s) end
@@ -1003,13 +1004,9 @@ local function classNameOf(name)
 			if rn and rn:lower() == short and cls then cache[short] = cls; return cls end
 		end
 	end
-	-- guild roster (class token na 11a posicao)
-	if IsInGuild and IsInGuild() and GetNumGuildMembers then
-		for i = 1, GetNumGuildMembers() do
-			local gn, _, _, _, _, _, _, _, _, _, gc = GetGuildRosterInfo(i)
-			if gn and gn:gsub("%-.*$", ""):lower() == short and gc then cache[short] = gc; return gc end
-		end
-	end
+	-- guild roster (class token)
+	local gm = G.FindMember(short)
+	if gm and gm.classToken then cache[short] = gm.classToken; return gm.classToken end
 	return cache[short] or ""
 end
 function L.ClassColorName(name)
