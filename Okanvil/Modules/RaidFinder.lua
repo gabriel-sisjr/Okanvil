@@ -1082,7 +1082,6 @@ ev:SetScript("OnEvent", function(_, event, arg1, arg2, ...)
 		OkanvilRaidFinderDB = OkanvilRaidFinderDB or {}
 		db = OkanvilRaidFinderDB
 		for k, v in pairs(defaults) do if db[k] == nil then db[k] = v end end
-		Okanvil.RaidFinder_DB = db
 	elseif event == "PLAYER_LOGIN" then
 		if not db then
 			OkanvilRaidFinderDB = OkanvilRaidFinderDB or {}
