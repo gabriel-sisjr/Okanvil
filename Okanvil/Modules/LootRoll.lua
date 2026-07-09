@@ -50,41 +50,21 @@ local function rarityColor(r)
 	return 0.9, 0.9, 0.9
 end
 
--- class color of a player by NAME -> "|cffRRGGBB". Finds their class from the
--- party/raid, else the guild roster, else a learned cache. Falls back to gold if
--- unknown -- but once we EVER see the player grouped, we remember their class, so
--- the color shows up even later (like RaidRoll knowing you're a mage).
-local classCache = {}   -- [lowername] = "MAGE" etc.  (fallback local)
+-- class color of a player by NAME -> "|cffRRGGBB". Delegates to the Loot
+-- module's persistent, cross-session class cache (L.ClassOf) so rolls and the
+-- saved history always agree on a player's color. Falls back to gold if
+-- unknown -- but once we EVER see the player grouped or in the guild, Loot
+-- remembers their class, so the color shows up even later.
 local function classColorCode(name)
 	if not name or name == "" then return "|cffffd200" end
 	local short = name:gsub("%-.*$", "")
-	local low = short:lower()
 	local class
-	-- Primary source: the PERSISTENT cache from the Loot module (L.ClassOf), shared
-	-- with the history -- so rolls and history use the SAME class color,
-	-- and it persists across sessions (remembered once seen grouped/in the guild).
+	-- The PERSISTENT cache from the Loot module (L.ClassOf), shared with the
+	-- history -- so rolls and history use the SAME class color, and it
+	-- persists across sessions (remembered once seen grouped/in the guild).
 	if Okanvil.Loot and Okanvil.Loot.ClassOf then
 		local c0 = Okanvil.Loot.ClassOf(short)
 		if c0 and c0 ~= "" then class = c0 end
-	end
-	-- fallback: resolve here (party/raid/guild) if the cache doesn't know yet
-	if not class then
-		local function scan(prefix, n)
-			for i = 1, n do
-				local u = prefix .. i
-				if UnitExists(u) and UnitName(u) == short then class = select(2, UnitClass(u)); return true end
-			end
-		end
-		if UnitName("player") == short then class = select(2, UnitClass("player"))
-		elseif GetNumRaidMembers and GetNumRaidMembers() > 0 then scan("raid", GetNumRaidMembers())
-		elseif GetNumPartyMembers and GetNumPartyMembers() > 0 then scan("party", GetNumPartyMembers()) end
-		if not class and IsInGuild and IsInGuild() and GetNumGuildMembers then
-			for i = 1, GetNumGuildMembers() do
-				local gn, _, _, _, _, _, _, _, _, _, gc = GetGuildRosterInfo(i)
-				if gn and gn:gsub("%-.*$", "") == short then class = gc; break end
-			end
-		end
-		if class then classCache[low] = class else class = classCache[low] end
 	end
 	local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
 	if c then return string.format("|cff%02x%02x%02x", c.r * 255, c.g * 255, c.b * 255) end
