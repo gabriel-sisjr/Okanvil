@@ -16,7 +16,6 @@ local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 
 local defaults = {
 	askOnEnter = true, -- prompt (Start log / No) when entering an instance
-	autoLog = false, -- legacy: silently auto-log on raid entry (used only if askOnEnter is off)
 	recLocked = false, -- lock the REC timer (click-through, no drag)
 	rec = { point = "TOP", x = 0, y = -140 },
 	sessions = {}, -- persisted history of logging sessions (zone, start, stop, bosses)
@@ -107,7 +106,6 @@ local function endSession()
 	if db._cur then
 		db._cur.stop = time()
 		db._cur.recentDeaths = nil          -- transient, don't persist
-		db._lastBosses = db._cur.bosses     -- keep last session's kills visible after Stop
 		-- persist into the history list (newest first)
 		db.sessions = db.sessions or {}
 		table.insert(db.sessions, 1, db._cur)
@@ -728,7 +726,6 @@ ev:SetScript("OnEvent", function(_, event, arg1, ...)
 			desc = "Combat-log control, REC timer and session tracker.",
 			icon = (Okanvil and Okanvil.ICONS and Okanvil.ICONS.logs) or "Interface\\Icons\\INV_Scroll_03",
 			build = function(panel)
-				OkanvilLogs.panel = panel
 				OkanvilLogs.BuildUI(panel)
 			end,
 			refresh = function()
@@ -766,8 +763,6 @@ ev:SetScript("OnEvent", function(_, event, arg1, ...)
 			if db.askOnEnter and zone ~= askedZone then
 				askedZone = zone
 				askToLog(zone)
-			elseif db.autoLog then
-				OkanvilLogs.SetLogging(true) -- legacy silent auto-log (askOnEnter off)
 			end
 		elseif not inInstance then
 			askedZone = nil -- left the instance -> allow asking again on next entry
