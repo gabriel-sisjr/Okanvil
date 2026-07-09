@@ -13,6 +13,8 @@ local Okanvil = Okanvil
 local I = {}
 Okanvil.Invite = I
 
+local G = Okanvil.Guild
+
 -- ------------------------------------------------------------
 -- DB
 -- ------------------------------------------------------------
@@ -139,11 +141,7 @@ local function canAutoInvite()
 	-- Build a set of my guild's member names, then check every group member.
 	if IsInGuild and IsInGuild() then
 		local guild = {}
-		local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-		for i = 1, total do
-			local gname = GetGuildRosterInfo(i)
-			if gname then guild[(gname:gsub("%-.*$", ""))] = true end
-		end
+		for _, m in ipairs(G.Roster()) do guild[m.name] = true end
 		if nRaid > 0 then
 			for i = 1, nRaid do
 				local rn = UnitName("raid" .. i)
@@ -205,15 +203,11 @@ end
 local function onlineGuildies(rankFilter)
 	local out = {}
 	if not (IsInGuild and IsInGuild()) then return out end
-	if SetGuildRosterShowOffline then SetGuildRosterShowOffline(true) end
-	local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
 	local me = UnitName and UnitName("player")
-	for i = 1, total do
-		local name, rank, rankIndex, _, _, _, _, _, online = GetGuildRosterInfo(i)
-		if name and online and name ~= me then
-			name = (name:gsub("%-.*$", ""))
-			if (not rankFilter) or rankFilter[rankIndex] then
-				out[#out + 1] = { name = name, rankIndex = rankIndex or 99, rank = rank or "" }
+	for _, m in ipairs(G.Roster()) do
+		if m.online and m.name ~= me then
+			if (not rankFilter) or rankFilter[m.rankIndex] then
+				out[#out + 1] = { name = m.name, rankIndex = m.rankIndex, rank = m.rank or "" }
 			end
 		end
 	end
@@ -609,13 +603,8 @@ gev:SetScript("OnEvent", function()
 	local members = l and l.members
 	if not members or #members == 0 then return end
 	-- build a quick name->online map
-	if SetGuildRosterShowOffline then SetGuildRosterShowOffline(true) end
-	local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
 	local online = {}
-	for i = 1, total do
-		local name, _, _, _, _, _, _, _, isOn = GetGuildRosterInfo(i)
-		if name then online[(name:gsub("%-.*$", ""))] = isOn and true or false end
-	end
+	for _, m in ipairs(G.Roster()) do online[m.name] = m.online end
 	for _, m in ipairs(members) do
 		local n = m.name
 		local now = online[n]
