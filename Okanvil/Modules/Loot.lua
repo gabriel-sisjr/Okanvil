@@ -487,9 +487,8 @@ local function captureCorpse()
 		if L.onLootWindow then L.onLootWindow() end
 	end
 	-- AUTO-GIVE: if you are the ML and the toggle is ON, hand the buckets (frag/boe) to the
-	-- collectors now that the loot window is open. BoP stays to roll; frag
-	-- with no collector stays on the boss; orb/boe with none falls to your bags. (Resolves L.
-	-- at runtime -> definition order does not matter.)
+	-- collectors now that the loot window is open. BoP stays to roll; frag/boe with no
+	-- collector stays on the boss. (Resolves L. at runtime -> definition order does not matter.)
 	if L.RunAutoGive then
 		local dec = L.RunAutoGive()
 		if dec then
@@ -1098,9 +1097,14 @@ function L.RenderInline(s, rowFn, idx, y)
 		elseif d.receivedBy and d.receivedBy ~= "" then
 			who = "  |cff5e6166->|r " .. L.ClassColorName(d.receivedBy)
 		end
-		if d.rollValue then
-			who = who .. "  |cff7cfc8a[roll " .. tostring(d.rollValue)
-				.. (d.rollSpec == "off" and " off" or "") .. "]|r"
+		if d.rolls and #d.rolls > 0 then
+			local kindColor = { need = "|cff7cfc8a", greed = "|cff8a8d93", de = "|cff8a5ad9" }
+			local tags = {}
+			for _, e in ipairs(d.rolls) do
+				local kc = kindColor[e.kind] or "|cff7cfc8a"
+				tags[#tags + 1] = L.ClassColorName(e.player) .. " " .. kc .. (e.roll or 0) .. "|r"
+			end
+			who = who .. "  |cff5e6166[|r" .. table.concat(tags, "|cff5e6166, |r") .. "|cff5e6166]|r"
 		end
 		-- d.item ja e o link colorido pela raridade; fallback para o nome.
 		r.txt:SetText((d.item ~= "" and d.item or ("[" .. (d.name or "?") .. "]")) .. qty .. who)
@@ -1198,7 +1202,7 @@ end
 -- AUTO-GIVE: decides the fate of ONE loot-window slot (when you are ML and the
 -- toggle is ON). Returns a DECISION: { action, who, bucket, name } without acting --
 -- so callers can inspect it; the real path calls giveSlotTo.
---   action: "give" (who) | "bags" (auto-loot to you) | "leave" (stay on boss) | "roll" (BoP, stays to roll)
+--   action: "give" (who) | "leave" (stay on boss) | "roll" (BoP, stays to roll)
 -- ------------------------------------------------------------
 local function autoGiveDecision(link, name)
 	local c = collectorsDB()
@@ -1211,10 +1215,8 @@ local function autoGiveDecision(link, name)
 	elseif bucket == "boe" then
 		local who = (c.boe or ""):gsub("^%s*(.-)%s*$", "%1")
 		if who ~= "" then return { action = "give", who = who, bucket = "boe", name = name } end
-		-- orb/BoE/pattern with no collector -> your bags (if a main collector name is set)
-		local main = (c.main or ""):gsub("^%s*(.-)%s*$", "%1")
-		if main ~= "" then return { action = "give", who = main, bucket = "boe", name = name } end
-		return { action = "bags", bucket = "boe", name = name }   -- deixa cair nos teus bags (nao master-loota)
+		-- orb/BoE/pattern with no collector -> LEAVE ON THE CORPSE (roll it normally)
+		return { action = "leave", bucket = "boe", name = name }
 	end
 	-- main = BoP gear -> stays to roll (never auto-bags)
 	return { action = "roll", bucket = "main", name = name }
