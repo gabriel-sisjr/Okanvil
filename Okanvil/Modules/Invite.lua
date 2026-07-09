@@ -73,28 +73,6 @@ function I.ToggleInList(listName, name)
 	else I.AddToList(listName, name) end
 end
 
--- comp grouped for display: returns an ordered array of
---   { group = <n or nil>, names = { "A", "B", ... } }
--- groups first (1..8, in order), then an "ungrouped" bucket last.
-function I.ListGrouped(listName)
-	local members = listMembers(db(), listName)
-	if not members then return {} end
-	local byGroup, ungrouped = {}, {}
-	for _, m in ipairs(members) do
-		if m.group then
-			byGroup[m.group] = byGroup[m.group] or {}
-			table.insert(byGroup[m.group], m.name)
-		else
-			ungrouped[#ungrouped + 1] = m.name
-		end
-	end
-	local out = {}
-	for g = 1, 8 do
-		if byGroup[g] then out[#out + 1] = { group = g, names = byGroup[g] } end
-	end
-	if #ungrouped > 0 then out[#out + 1] = { group = nil, names = ungrouped } end
-	return out
-end
 I.db = db
 
 local function Print(msg) Okanvil:Print(msg) end
@@ -286,25 +264,6 @@ local function assignOne(name)
 	if SetRaidSubgroup then SetRaidSubgroup(idx, want) end
 end
 
--- full pass: move every raider we have a comp group for. Safe to click repeatedly.
-function I.Arrange()
-	if not activeComp then Print("No comp loaded -- invite a saved list first."); return end
-	if (GetNumRaidMembers and GetNumRaidMembers() or 0) == 0 then Print("Not in a raid yet."); return end
-	local n = GetNumRaidMembers()
-	local moved = 0
-	for i = 1, n do
-		local rn = GetRaidRosterInfo(i)
-		if rn then
-			local want = activeComp[rn:lower()]
-			if want then
-				local _, cur = raidIndexOf(rn)
-				if cur ~= want and SetRaidSubgroup then SetRaidSubgroup(i, want); moved = moved + 1 end
-			end
-		end
-	end
-	Print("Arranged " .. moved .. " raider(s) into comp groups.")
-end
-
 -- ------------------------------------------------------------
 -- saved lists (members = { {name=, group=}, ... })
 -- ------------------------------------------------------------
@@ -434,13 +393,6 @@ function I.ParseMembers(text)
 	return out
 end
 
--- back-compat: names-only view of ParseMembers
-function I.ParseNames(text)
-	local out = {}
-	for _, m in ipairs(I.ParseMembers(text)) do out[#out + 1] = m.name end
-	return out
-end
-
 -- import `text` into a named list (merges, de-dupes, keeps group numbers).
 -- If `replace` is true the list is overwritten with exactly the imported comp.
 function I.ImportToList(listName, text, replace)
@@ -480,7 +432,7 @@ end
 -- ------------------------------------------------------------
 -- build patterns from WoW globals so join/decline detection is locale-safe
 local function mkPat(fmt) local p = (fmt or ""):gsub("[%(%)%.%+%-%*%?%[%]%^%$]", "%%%0"); return (p:gsub("%%s", "(.+)")) end
-local PAT_DECLINE = ERR_INVITE_PLAYER_S and mkPat(ERR_DECLINE_GROUP_S or "%s declines your group invitation.")
+local PAT_DECLINE = ERR_DECLINE_GROUP_S and mkPat(ERR_DECLINE_GROUP_S or "%s declines your group invitation.")
 
 -- Parse the keyword setting into a list. Multiple keywords are allowed, split on
 -- comma/space/semicolon -- e.g. "inv, invite, ginv" all trigger.
@@ -767,7 +719,7 @@ local function Invite_BuildUI(panel)
 		onPrimary = function()
 			if not I then return end
 			I.SetKeywordEnabled(not I.KeywordEnabled())
-			if Okanvil.RefreshPanel then Okanvil:RefreshPanel() end
+			panel.dash:Refresh()
 		end,
 		statusText = function()
 			if not I then return "|cffff5555engine not loaded|r" end
