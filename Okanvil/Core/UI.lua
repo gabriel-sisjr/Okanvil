@@ -22,7 +22,6 @@ local HOME, GUILD, LOOT, INVITE, MODULES, SETTINGS = "__home", "__guild", "__loo
 -- Settings (proportional, never breaks the layout). Resizing from offsets was
 -- fragile and could break the UI, so we dropped it entirely.
 local WIN_W, WIN_H = 940, 660
-local MIN_W, MIN_H = WIN_W, WIN_H   -- kept for any legacy references
 local NAV_W = 190
 local HEADER_H = 30
 local FOOTER_H = 22
@@ -111,7 +110,6 @@ function Okanvil:BuildShell()
 		else brandFS:SetText("|cff8a8d93\194\183  " .. b .. "|r") end -- "· <guild>"
 	end
 	paintBrand()
-	self.headerTitle = brandFS   -- so Settings can rebrand live
 	self.headerPaintBrand = paintBrand
 
 	local close = W.Button(hdr, "X"); close:SetSize(24, 20); close:SetPoint("RIGHT", -3, 0)
@@ -384,11 +382,6 @@ function Okanvil:MountPageRat()
 	self._pageRat = art
 	return art
 end
-
--- Back-compat no-op: panels used to call this to get their own rat. Now the
--- single content rat covers every page, so per-panel mounts do nothing. Kept so
--- existing call sites don't error while we remove them.
-function Okanvil:MountBgArt() end
 
 -- refresh the single page rat (called from Settings when opacity/toggle changes).
 function Okanvil:RefreshRatArt()
@@ -789,10 +782,6 @@ function Okanvil:Settings_Options(p)
 	W.DropDown(p, function() return (LSM and LSM:List("font")) or { db.font } end,
 		function() return db.font end, function(v) db.font = v; Okanvil:ApplyFonts() end, "font")
 		:Size(200, 22):Point("TOPLEFT", X + 90, -272)
-	local tl = W.Text(p, "Bar texture", 11, "dim"); tl:SetPoint("TOPLEFT", X, -304)
-	W.DropDown(p, function() return (LSM and LSM:List("statusbar")) or { db.statusbar } end,
-		function() return db.statusbar end, function(v) db.statusbar = v end, "statusbar")
-		:Size(200, 22):Point("TOPLEFT", X + 90, -302)
 
 	-- BRANDING (product name is FIXED -- guilds only set their own skin)
 	local b = W.Text(p, "BRANDING", 10, "dim"); b:SetPoint("TOPLEFT", X, -344)
