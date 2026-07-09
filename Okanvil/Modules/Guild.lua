@@ -27,6 +27,84 @@ local function stripRealm(name)
 end
 
 -- ------------------------------------------------------------
+-- Shared guild-roster walk. Every module that needs "all guild members" (or a
+-- single member's rank/class) should go through this instead of re-deriving
+-- its own GetGuildRosterInfo loop -- independent copies had already drifted
+-- into real bugs: an incomplete roster export, a rank checkbox that could
+-- vanish for a session, dead class-coloring (see CODE-REVIEW.md §3/§2).
+-- ------------------------------------------------------------
+
+-- G.Roster(includeOffline=true) -> array of member records:
+--   { name, rank, rankIndex, level, classToken, className, zone, note,
+--     officernote, online }
+-- name is realm-stripped. classToken is the locale-proof "MAGE"-style token
+-- (11th GetGuildRosterInfo return) -- use this for RAID_CLASS_COLORS lookups,
+-- NOT className (the localized display name, kept only for text that must
+-- show a human-readable class name, e.g. the roster JSON export).
+function G.Roster(includeOffline)
+	if includeOffline ~= false and SetGuildRosterShowOffline then
+		SetGuildRosterShowOffline(true)
+	end
+	local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
+	local out = {}
+	for i = 1, total do
+		-- 3.3.5a signature: name, rank, rankIndex, level, class, zone, note,
+		-- officernote, online, status, classToken, achievementPoints, ...
+		local name, rank, rankIndex, level, className, zone, note, officernote, online, _, classToken =
+			GetGuildRosterInfo(i)
+		if name then
+			out[#out + 1] = {
+				name = stripRealm(name), rank = rank, rankIndex = rankIndex or 99, level = level,
+				classToken = classToken, className = className, zone = zone,
+				note = note, officernote = officernote, online = online and true or false,
+			}
+		end
+	end
+	return out
+end
+
+-- G.FindMember(name, includeOffline=true) -> that member's roster record, or
+-- nil. Case-insensitive, realm-stripped. For one-off lookups; callers that
+-- need to test MANY names against one roster (canAutoInvite) should call
+-- G.Roster() once themselves instead of calling this in a loop.
+function G.FindMember(name, includeOffline)
+	if not name or name == "" then return nil end
+	name = stripRealm(name):lower()
+	for _, m in ipairs(G.Roster(includeOffline)) do
+		if m.name:lower() == name then return m end
+	end
+	return nil
+end
+
+-- G.IsAlt(rankName, rankIndex, officernote) -> boolean. THE alt rule -- MUST
+-- match the RATS website (loot/history tools): an entry is an ALT if
+-- rankIndex == 4, OR its rank name contains "alt", OR its officer note
+-- starts with "<Main> alt".
+function G.IsAlt(rankName, rankIndex, officernote)
+	if rankIndex == 4 then return true end
+	if rankName and rankName:lower():find("alt", 1, true) then return true end
+	-- officer note like "Mainname alt" (site rule: /^(.+?)\s+alt\b/i)
+	if officernote and officernote:lower():match("^.-%s+alt%f[%A]") then return true end
+	return false
+end
+
+-- G.MainOf(publicnote, officernote) -> the main's name this alt belongs to,
+-- or nil if we can't tell. Mirrors the RATS site's mainOfG/altMainNote:
+--   1) officer note "Mainname alt ..." -> the word before "alt"
+--   2) else the first word of the public note if it looks like a name
+function G.MainOf(publicnote, officernote)
+	if officernote and officernote ~= "" then
+		local m = officernote:match("^(.-)%s+[Aa][Ll][Tt]%f[%A]")
+		if m and m ~= "" then return (m:gsub("^%s+", ""):gsub("%s+$", "")) end
+	end
+	if publicnote and publicnote ~= "" then
+		local first = publicnote:match("^%s*([A-Za-z\192-\255]+)")
+		if first and #first >= 2 then return first end
+	end
+	return nil
+end
+
+-- ------------------------------------------------------------
 -- Roster export (absorbed from the old Okanvil-Guild plugin)
 -- matches officer/guild importer:
 --   { guildName, realm, exportedAt, ranks:[{name,rankIndex}], roster:[{...}] }
@@ -34,23 +112,17 @@ end
 function G.BuildRosterJSON()
 	local guildName = GetGuildInfo("player") or "Guild"
 	local realm = GetRealmName() or ""
-	local total = GetNumGuildMembers() or 0
 	local ranksSeen, ranks, members = {}, {}, {}
-	for i = 1, total do
-		-- 3.3.5 signature: name, rank, rankIndex, level, class, zone, note, officernote, online, status
-		local name, rankName, rankIndex, level, class, _, note, officernote = GetGuildRosterInfo(i)
-		if name then
-			name = stripRealm(name)
-			rankIndex = rankIndex or 0
-			if not ranksSeen[rankIndex] then
-				ranksSeen[rankIndex] = true
-				table.insert(ranks, { idx = rankIndex, name = rankName or ("Rank " .. rankIndex) })
-			end
-			table.insert(members, string.format(
-				'{"name":"%s","class":"%s","level":%d,"rankName":"%s","rankIndex":%d,"publicNote":"%s","officerNote":"%s"}',
-				esc(name), esc(class), level or 0, esc(rankName), rankIndex, esc(note), esc(officernote)
-			))
+	for _, m in ipairs(G.Roster(true)) do
+		local rankIndex = m.rankIndex or 0
+		if not ranksSeen[rankIndex] then
+			ranksSeen[rankIndex] = true
+			table.insert(ranks, { idx = rankIndex, name = m.rank or ("Rank " .. rankIndex) })
 		end
+		table.insert(members, string.format(
+			'{"name":"%s","class":"%s","level":%d,"rankName":"%s","rankIndex":%d,"publicNote":"%s","officerNote":"%s"}',
+			esc(m.name), esc(m.className), m.level or 0, esc(m.rank), rankIndex, esc(m.note), esc(m.officernote)
+		))
 	end
 	table.sort(ranks, function(a, b) return a.idx < b.idx end)
 	local ranksJson = {}
