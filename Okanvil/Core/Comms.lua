@@ -86,16 +86,6 @@ function C.Send(msgType, ...)
 	return true
 end
 
--- Whisper a typed message straight to one player (for targeted ACKs). target is
--- a unit name. Works even when the recipient isn't in your subgroup channel.
-function C.Whisper(msgType, target, ...)
-	if not target or target == "" then return false end
-	local text = pack(msgType, ...)
-	if #text > 240 then return false end
-	SendAddonMessage(PREFIX, text, "WHISPER", target)
-	return true
-end
-
 -- ------------------------------------------------------------
 -- Receive: split the payload, gate on version, dispatch to the type handler.
 -- The sender name is passed through un-trusted -- handlers validate by role.
@@ -120,28 +110,3 @@ ev:RegisterEvent("CHAT_MSG_ADDON")
 ev:SetScript("OnEvent", function(_, _, prefix, message, channel, sender)
 	onMessage(prefix, message, channel, sender)
 end)
-
--- ------------------------------------------------------------
--- Small shared helper other modules reuse: run fn() ONCE after `delay` seconds.
--- 3.3.5a has no C_Timer, and the ML flip needs two SetLootMethod calls on
--- SEPARATE frames -- so we expose a tiny one-shot timer on the Comms frame.
--- ------------------------------------------------------------
-local pending = {}   -- { {at=GetTime()+delay, fn=fn}, ... }
-function C.After(delay, fn)
-	if type(fn) ~= "function" then return end
-	pending[#pending + 1] = { at = (GetTime() or 0) + (delay or 0), fn = fn }
-	ev:Show()
-end
-ev:SetScript("OnUpdate", function(self)
-	if #pending == 0 then self:Hide(); return end
-	local now = GetTime() or 0
-	for i = #pending, 1, -1 do
-		if now >= pending[i].at then
-			local fn = pending[i].fn
-			table.remove(pending, i)
-			-- pcall so one bad callback can't wedge the timer loop
-			pcall(fn)
-		end
-	end
-end)
-ev:Hide()   -- OnUpdate only runs while timers are pending
