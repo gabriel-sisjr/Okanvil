@@ -213,13 +213,24 @@ do
 	end
 end
 
--- 3.3.5a: pull the creature entry id out of a unit GUID ("0x" + 4 type nibbles + 4 id nibbles)
+-- 3.3.5a: pull the creature entry id out of a unit GUID (same parse as Loot.lua's
+-- cidFromGUID: pad to 16 hex chars, validate the F13/F15 type triplet, extract sub(6,10))
 local function npcID(guid)
 	if type(guid) ~= "string" then
 		return nil
 	end
-	local id = guid:match("^0x%x%x%x%x(%x%x%x%x)")
-	return id and tonumber(id, 16) or nil
+	local hex = guid:match("^0x(%x+)$") or guid:match("^(%x+)$")
+	if not hex then
+		return nil
+	end
+	if #hex < 16 then
+		hex = string.rep("0", 16 - #hex) .. hex
+	end
+	local triplet = hex:sub(1, 3):upper()
+	if triplet ~= "F13" and triplet ~= "F15" then
+		return nil
+	end
+	return tonumber(hex:sub(6, 10), 16)
 end
 
 -- Multi-NPC encounters: collapse their members into one line (by id or name).
@@ -359,6 +370,11 @@ local function buildRec()
 		OkanvilLogs.SetLogging(false)
 	end)
 	r:SetScript("OnUpdate", function(s, e)
+		-- Modulo desligado = nao forca o LoggingCombat nem mostra o REC ligado.
+		if Okanvil.ModuleActive and not Okanvil:ModuleActive(ADDON) then
+			s:Hide()
+			return
+		end
 		s._t = (s._t or 0) + e
 		if s._t < 0.5 then
 			return

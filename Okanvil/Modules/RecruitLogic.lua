@@ -73,17 +73,16 @@ function RecruitLogic.decide(db, msg, ctx)
 	if db.blacklist and db.blacklist ~= "" and RecruitLogic.matchList(msg, db.blacklist) then
 		return out
 	end
-	if not db.autoInvite then
-		return out
-	end
 	if not RecruitLogic.matchList(msg, db.keywords) then
 		return out
 	end
-	if ctx.lastInvite and (ctx.now - ctx.lastInvite) <= (db.inviteCooldown or 300) then
-		return out -- on invite cooldown: do nothing
+
+	-- invite and reply are independent features from here on: invite keeps its own
+	-- toggle + cooldown, reply must still fire even when Auto-invite is off/cooling down.
+	if db.autoInvite and not (ctx.lastInvite and (ctx.now - ctx.lastInvite) <= (db.inviteCooldown or 300)) then
+		out.invite = true
 	end
 
-	out.invite = true
 	local text = (db.afkMode and db.afkReply ~= "") and db.afkReply or db.reply
 	if text and text ~= "" and (not ctx.lastReply or (ctx.now - ctx.lastReply) > (db.replyCooldown or 600)) then
 		out.reply = text
