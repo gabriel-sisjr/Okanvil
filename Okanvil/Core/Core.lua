@@ -214,10 +214,6 @@ function Okanvil:Font()
 	return path or STANDARD_TEXT_FONT, db.fontSize, db.fontFlag
 end
 
-function Okanvil:Texture()
-	return (LSM and LSM:Fetch("statusbar", self.db.statusbar, true)) or FLAT
-end
-
 -- create a font string that auto-restyles when the user changes the font
 function Okanvil:NewText(parent, layer, template)
 	local fs = parent:CreateFontString(nil, layer or "OVERLAY", template)
@@ -248,15 +244,6 @@ function Okanvil:Backdrop(frame, alpha, dark)
 		end
 		return
 	end
-	-- fallback if Widgets.lua somehow didn't load
-	frame:SetBackdrop({
-		bgFile = FLAT, edgeFile = FLAT, edgeSize = 1,
-		insets = { left = 1, right = 1, top = 1, bottom = 1 },
-	})
-	local a = alpha or self.db.bgAlpha
-	if dark then frame:SetBackdropColor(0.06, 0.06, 0.08, a)
-	else frame:SetBackdropColor(0.10, 0.10, 0.12, a) end
-	frame:SetBackdropBorderColor(0.32, 0.32, 0.38, 1)
 end
 
 function Okanvil:Print(msg)
