@@ -576,6 +576,7 @@ function Okanvil:BuildHome()
 
 	-- (rat art is one shared overlay on Okanvil.content -- nothing to build here.)
 
+	local G = Okanvil.Guild
 	local function refreshGuild()
 		if not (IsInGuild and IsInGuild()) then
 			tiles.online.num:SetText("--"); tiles.members.num:SetText("--"); tiles.rank.num:SetText("--")
@@ -584,38 +585,9 @@ function Okanvil:BuildHome()
 			wrap.gempty:SetText("|cff888888You are not in a guild.|r")
 			return
 		end
-		-- 3.3.5a: GetNumGuildMembers only counts ONLINE unless offline are shown.
-		-- Force offline in so we walk the whole roster, not just online.
-		if SetGuildRosterShowOffline then SetGuildRosterShowOffline(true) end
-		local total = GetNumGuildMembers and GetNumGuildMembers() or 0
 		local online, mains, mine, mineIdx = 0, 0, "--", nil
 		local myName = UnitName and UnitName("player")
 		local onlineList = {}
-		-- Alt rule -- MUST match the RATS website (loot/history tools): an entry is an
-		-- ALT if rankIndex == 4, OR its rank name contains "alt", OR its officer note
-		-- starts with "<Main> alt". MEMBERS counts MAINS only (real people), not toons.
-		local function isAlt(rankName, rankIndex, officernote)
-			if rankIndex == 4 then return true end
-			if rankName and rankName:lower():find("alt", 1, true) then return true end
-			-- officer note like "Mainname alt" (site rule: /^(.+?)\s+alt\b/i)
-			if officernote and officernote:lower():match("^.-%s+alt%f[%A]") then return true end
-			return false
-		end
-		-- Which MAIN does this alt belong to? Mirrors the RATS site mainOfG/altMainNote:
-		--   1) officer note "Mainname alt ..." -> the word before "alt"
-		--   2) else the first word of the public note if it looks like a name
-		-- Returns nil if we can't tell.
-		local function mainOf(publicnote, officernote)
-			if officernote and officernote ~= "" then
-				local m = officernote:match("^(.-)%s+[Aa][Ll][Tt]%f[%A]")
-				if m and m ~= "" then return (m:gsub("^%s+", ""):gsub("%s+$", "")) end
-			end
-			if publicnote and publicnote ~= "" then
-				local first = publicnote:match("^%s*([A-Za-z\192-\255]+)")
-				if first and #first >= 2 then return first end
-			end
-			return nil
-		end
 		-- rank colour so the online list is scannable at a glance. RATS ladder
 		-- (rankIndex 0 = top): Warchief Rat / Warchief's Fangs = officers (red-gold),
 		-- Raider Rat = orange, Sewer Rat = yellow, Alt = grey-blue, Pug/other = grey.
@@ -630,23 +602,19 @@ function Okanvil:BuildHome()
 			if rn:find("sewer", 1, true) then return "ffffe049" end           -- Sewer Rat: yellow
 			return "ff9aa0a6"                                                  -- Pug / unranked: grey
 		end
-		for i = 1, total do
-			-- 3.3.5: name, rank, rankIndex, level, class, zone, publicnote, officernote, online
-			local name, rank, rankIndex, _, class, zone, publicnote, officernote, isOnline = GetGuildRosterInfo(i)
-			if name then
-				local alt = isAlt(rank, rankIndex, officernote)
-				if not alt then mains = mains + 1 end
-				if isOnline then
-					online = online + 1
-					onlineList[#onlineList + 1] = {
-						name = name, rank = rank or "", rankIndex = rankIndex or 99, class = class,
-						col = rankColor(rank, rankIndex, alt), alt = alt,
-						zone = zone or "",
-						main = alt and mainOf(publicnote, officernote) or nil,
-					}
-				end
-				if name == myName then mine = rank or "--"; mineIdx = rankIndex end
+		for _, m in ipairs(G.Roster()) do
+			local alt = G.IsAlt(m.rank, m.rankIndex, m.officernote)
+			if not alt then mains = mains + 1 end
+			if m.online then
+				online = online + 1
+				onlineList[#onlineList + 1] = {
+					name = m.name, rank = m.rank or "", rankIndex = m.rankIndex, class = m.className,
+					col = rankColor(m.rank, m.rankIndex, alt), alt = alt,
+					zone = m.zone or "",
+					main = alt and G.MainOf(m.note, m.officernote) or nil,
+				}
 			end
+			if m.name == myName then mine = m.rank or "--"; mineIdx = m.rankIndex end
 		end
 		tiles.online.num:SetText(tostring(online))
 		tiles.members.num:SetText(tostring(mains))   -- MAINS only (real people, alts excluded)
@@ -1132,6 +1100,7 @@ function Okanvil:BuildInvite()
 	local fill = newFillPanel()
 	local host = fill.child
 	local I = Okanvil.Invite
+	local G = Okanvil.Guild
 
 	-- Dashboard shell (MRT/Recruit-style): header (icon + title + CTA), no tabs,
 	-- no drawer -> the two-column control/roster layout scrolls in one panel.
@@ -1234,12 +1203,11 @@ function Okanvil:BuildInvite()
 		if rankBuilt then for _, c in ipairs(rankChecks) do c.refresh() end; return end
 		local iv = I.db()
 		local seen, ranks = {}, {}
-		local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-		for i = 1, total do
-			local _, rname, ridx = GetGuildRosterInfo(i)
+		for _, m in ipairs(G.Roster()) do
+			local ridx = m.rankIndex
 			if ridx and not seen[ridx] then
 				seen[ridx] = true
-				ranks[#ranks + 1] = { idx = ridx, name = (rname and rname ~= "" and rname) or ("Rank " .. ridx) }
+				ranks[#ranks + 1] = { idx = ridx, name = (m.rank and m.rank ~= "" and m.rank) or ("Rank " .. ridx) }
 			end
 		end
 		if #ranks == 0 then return end
@@ -1378,25 +1346,15 @@ function Okanvil:BuildInvite()
 			r:ClearAllPoints(); r:SetPoint("TOPLEFT", 0, -4); r:SetSize(200, 18)
 			r.txt:SetText("|cff888888Not in a guild.|r"); r:Show(); rchild:SetHeight(30); return
 		end
-		if SetGuildRosterShowOffline then SetGuildRosterShowOffline(true) end
-		local total = (GetNumGuildMembers and GetNumGuildMembers()) or 0
-		-- collect members, split alts out (same alt rule as Home), group by rank
+		-- collect members, split alts out (shared G.IsAlt rule), group by rank
 		local buckets, order = {}, {}
-		for i = 1, total do
-			local name, rank, rankIndex, _, class, _, publicnote, officernote, online = GetGuildRosterInfo(i)
-			if name then
-				name = (name:gsub("%-.*$", ""))
-				local classToken = select(11, GetGuildRosterInfo(i))
-				local isAlt = (rankIndex == 4)
-					or (rank and rank:lower():find("alt", 1, true))
-					or (officernote and officernote:lower():match("^.-%s+alt%f[%A]"))
-				-- search filter: if a query is typed, keep only matching names
-				local pass = (rfilter == "") or name:lower():find(rfilter, 1, true)
-				if not isAlt and pass then
-					local key = rankIndex or 99
-					if not buckets[key] then buckets[key] = { name = rank or ("Rank " .. key), idx = key, list = {} }; order[#order + 1] = key end
-					table.insert(buckets[key].list, { name = name, class = class, classToken = classToken, online = online })
-				end
+		for _, m in ipairs(G.Roster()) do
+			-- search filter: if a query is typed, keep only matching names
+			local pass = (rfilter == "") or m.name:lower():find(rfilter, 1, true)
+			if not G.IsAlt(m.rank, m.rankIndex, m.officernote) and pass then
+				local key = m.rankIndex
+				if not buckets[key] then buckets[key] = { name = m.rank or ("Rank " .. key), idx = key, list = {} }; order[#order + 1] = key end
+				table.insert(buckets[key].list, { name = m.name, class = m.className, classToken = m.classToken, online = m.online })
 			end
 		end
 		table.sort(order)
