@@ -525,13 +525,6 @@ local function makeCheck(parent, key, label, x, y, onChange)
 	return c
 end
 
--- shared gold RATS-Hub button (honours ._active for tab highlighting)
-local function makeFlatButton(parent, text, w, h, kind)
-	local b = W.Button(parent, text, kind)
-	b:SetSize(w, h)
-	return b
-end
-
 local function numHook(box, key, lo, hi)
 	box:SetScript("OnEditFocusLost", function(s)
 		local v = tonumber(s:GetText())
@@ -693,7 +686,6 @@ function Rec_BuildUI(parent)
 		},
 	})
 	f.dash = dash
-	f.toggleBtn = dash.cta
 
 	-- fill the shell zones: main = live log + a compact stat bar across its top;
 	-- drawer = the vertical Contacts list (name + inv/+f) -- the thing you act on.
