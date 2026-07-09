@@ -8,9 +8,8 @@
 --  Okanvil-IDs -- a spell/item ID LIBRARY (find an ID by name, no need to
 --  own the item). Two layers:
 --    * LIB  (Okanvil.IDs.*)  a reusable, UI-free lookup API other addons can
---      call: EnsureSpells / SpellID / FindSpell / FindItem / SearchItems /
---      ItemName / RecordItem / SweepLoaded / FullScan + a saved item<->spell
---      link store. Spells come from a fully-offline client scan (Spell.dbc);
+--      call: EnsureSpells / FindSpell / FindItem / RecordItem / SweepLoaded /
+--      FullScan. Spells come from a fully-offline client scan (Spell.dbc);
 --      items are harvested from anything the client already cached (tooltips
 --      you hover, bags, bank, merchant, chat links) + a "Sweep loaded" pass.
 --    * UI   a thin client of the lib (search box + 2 result columns).
@@ -31,16 +30,14 @@ local defaults = {
 	icons = {}, -- [itemID] = iconPath  (harvested during Full scan; survives a
 	            -- client change so we render the real icon from the FILE instead
 	            -- of "?" when the fresh client hasn't cached the item yet)
-	links = {}, -- [itemID] = { [spellID] = spellName }  -- item<->buff link store (lib API)
 }
 local db
 
 OkanvilIDs = OkanvilIDs or {} -- namespace for slash / boot
 
 -- The public library table. Lives on Okanvil (Okanvil.IDs) so other plugins can
--- call it; also exposed as OkanvilIDs.Lib.
+-- call it.
 local IDs = {}
-OkanvilIDs.Lib = IDs
 if Okanvil then Okanvil.IDs = IDs end
 
 -- ============================================================
@@ -100,15 +97,6 @@ function IDs.EnsureSpells(onDone)
 	end)
 end
 
-function IDs.SpellsReady() return spellBuilt end
-function IDs.SpellCount() return #spellIndex end
-
--- Exact name -> id (nil until the index is built, or if unknown).
-function IDs.SpellID(name)
-	if not name then return nil end
-	return spellByName[string.lower(name)]
-end
-
 -- Substring search over the spell index. `query` may be a name fragment or a
 -- numeric id. Returns an array of { id, name } (capped at MAX_RESULTS).
 function IDs.FindSpell(query, limit)
@@ -149,8 +137,6 @@ local function refreshItemLower()
 	for id, name in pairs(db.items) do itemLower[id] = string.lower(name) end
 	itemLowerN = itemCount
 end
-
-function IDs.ItemName(id) return db and db.items[id] end
 
 -- Icon path for an item id, preferring the FILE-persisted one (survives a client
 -- change) and falling back to the live client cache. nil if we have neither yet.
@@ -221,64 +207,6 @@ function IDs.FindItem(query, limit, matched)
 			out[#out + 1] = { id = id, name = db.items[id], isItem = true }
 			if matched then matched[id] = true end
 			if #out >= limit then break end
-		end
-	end
-	return out
-end
-IDs.SearchItems = IDs.FindItem -- alias
-
--- The use/proc spell of an item (reads the cached item -- no ownership needed).
--- Returns spellName, spellID (id may be nil if only the name is known).
-function IDs.ItemSpell(itemID)
-	if not itemID then return nil end
-	local sName, a, b = GetItemSpell(itemID)
-	if not sName then return nil end
-	local sId = (type(a) == "number" and a) or (type(b) == "number" and b) or IDs.SpellID(sName)
-	return sName, sId
-end
-
--- ------------------------------------------------------------
--- saved item<->spell link store (a small user library, not listening)
--- ------------------------------------------------------------
-function IDs.Link(itemID, spellID, spellName)
-	if not (itemID and spellID) then return end
-	db.links[itemID] = db.links[itemID] or {}
-	db.links[itemID][spellID] = spellName or true
-end
-
-function IDs.Unlink(itemID, spellID)
-	local t = db.links[itemID]
-	if not t then return end
-	t[spellID] = nil
-	for _ in pairs(t) do return end -- still has entries
-	db.links[itemID] = nil          -- emptied -> drop it
-end
-
--- Spells/buffs tied to an item: saved links + the live GetItemSpell proc.
-function IDs.LinksForItem(itemID)
-	local out, seen = {}, {}
-	local t = db.links[itemID]
-	if t then
-		for sid, sname in pairs(t) do
-			if not seen[sid] then
-				seen[sid] = true
-				out[#out + 1] = { id = sid, name = (type(sname) == "string" and sname) or GetSpellInfo(sid), linked = true }
-			end
-		end
-	end
-	local sName, sId = IDs.ItemSpell(itemID)
-	if sName and sId and not seen[sId] then
-		out[#out + 1] = { id = sId, name = sName, proc = true }
-	end
-	return out
-end
-
--- Items that grant a given spell/buff (reverse lookup over the link store).
-function IDs.ItemsForSpell(spellID)
-	local out = {}
-	for iid, t in pairs(db.links) do
-		if t[spellID] then
-			out[#out + 1] = { id = iid, name = db.items[iid] or GetItemInfo(iid) or ("item " .. iid), isItem = true }
 		end
 	end
 	return out
