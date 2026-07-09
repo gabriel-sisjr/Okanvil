@@ -255,7 +255,6 @@ end
 -- DropsByBoss() -- never a session per boss.
 -- ------------------------------------------------------------
 local MAX_SESSIONS = 20
-local lastLootAt   = 0   -- so para info; nao decide sessoes
 
 -- db() returns the ACCOUNT-WIDE loot block (CONFIG only: collectors, rollMsg). NEVER
 -- stores sessions here -- history is PER-CHARACTER (storage-model rule).
@@ -423,7 +422,6 @@ local function storeDrop(boss, id, link, name, rarity, boe, rollID, rollDur)
 	}
 	if rollID then dp.rollID = rollID; dp.rollStart = GetTime(); dp.rollDur = rollDur or 60 end
 	s.drops[#s.drops + 1] = dp
-	lastLootAt = GetTime and GetTime() or 0
 	if L.onLoot then L.onLoot() end
 	if OkanvilLogs and OkanvilLogs.NoteBossFromLoot and boss then OkanvilLogs.NoteBossFromLoot(boss) end
 	return dp
@@ -916,7 +914,7 @@ function L.ClearActiveDrops()
 	local s = sessions()[1]
 	if not s then return false end
 	wipe(s.drops)
-	activeRoll = nil; lastLootAt = 0
+	activeRoll = nil
 	if L.onLoot then L.onLoot() end
 	return true
 end
@@ -1037,15 +1035,14 @@ function L.SessionJSON(s)
 	local size = isDungeon and 5 or ((s.difficulty == 2 or s.difficulty == 4) and 25 or 10)
 	local drops = {}
 	for _, d in ipairs(s.drops) do
-		-- DE -> sentinel "Disenchant" (sem pessoa; o hub exclui das contas de win).
-		local player = d.de and "Disenchant" or (d.receivedBy or "")
-		local class  = d.de and "" or classNameOf(d.receivedBy)
+		local player = d.receivedBy or ""
+		local class  = classNameOf(d.receivedBy)
 		drops[#drops + 1] = string.format(
 			'{"ts":%d,"player":"%s","class":"%s","itemId":%d,"name":"%s","icon":"%s",'
 			.. '"quality":%d,"boss":"%s","raid":"%s","size":%d,"runId":"%s","de":%s,"boe":%s}',
 			d.t or 0, esc(player), esc(class), d.id or 0,
 			esc(d.name), esc(d.icon or iconToken(d.item, d.id)), d.rarity or 4, esc(d.boss),
-			esc(s.zone or ""), size, esc(runId), d.de and "true" or "false",
+			esc(s.zone or ""), size, esc(runId), "false",
 			d.boe and "true" or "false")
 	end
 	return string.format(
@@ -1087,11 +1084,8 @@ function L.RenderInline(s, rowFn, idx, y)
 		else
 			r.txt:ClearAllPoints(); r.txt:SetPoint("LEFT", r, "LEFT", 0, 0); r.txt:SetPoint("RIGHT", r, "RIGHT", -4, 0)
 		end
-		local qty = (d.qty and d.qty > 1) and ("  |cff8a8d93x" .. d.qty .. "|r") or ""
 		local who = ""
-		if d.de then
-			who = "  |cff8a8d93->|r |cff8a5ad9Disenchant|r"
-		elseif d.receivedBy and d.receivedBy ~= "" then
+		if d.receivedBy and d.receivedBy ~= "" then
 			who = "  |cff5e6166->|r " .. L.ClassColorName(d.receivedBy)
 		end
 		if d.rolls and #d.rolls > 0 then
@@ -1104,7 +1098,7 @@ function L.RenderInline(s, rowFn, idx, y)
 			who = who .. "  |cff5e6166[|r" .. table.concat(tags, "|cff5e6166, |r") .. "|cff5e6166]|r"
 		end
 		-- d.item ja e o link colorido pela raridade; fallback para o nome.
-		r.txt:SetText((d.item ~= "" and d.item or ("[" .. (d.name or "?") .. "]")) .. qty .. who)
+		r.txt:SetText((d.item ~= "" and d.item or ("[" .. (d.name or "?") .. "]")) .. who)
 		local link = d.item ~= "" and d.item or nil
 		r:SetScript("OnEnter", function(self)
 			if not link then return end
