@@ -658,6 +658,7 @@ function RM.OnRollOpen() popOrRefresh(false) end
 function RM.OnLootWindow() popOrRefresh(true) end
 
 function RM.Toggle()
+	if Okanvil.ModuleActive and not Okanvil:ModuleActive("__lootroll") then return end
 	local ok, err = pcall(function()
 		if win and win:IsShown() then
 			win:Hide()
@@ -678,6 +679,8 @@ end
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:SetScript("OnEvent", function()
+	-- LootRoll module DISABLED = no callback hooks, no floating window this session.
+	if Okanvil.ModuleActive and not Okanvil:ModuleActive("__lootroll") then return end
 	if not Okanvil.Loot then return end
 	L = Okanvil.Loot
 	-- chain onto Loot's callbacks without clobbering them
@@ -693,3 +696,42 @@ end)
 
 SLASH_OKROLL1 = "/okroll"
 SlashCmdList["OKROLL"] = function() RM.Toggle() end
+
+-- ------------------------------------------------------------
+-- Settings UI -- registered below as the "__lootroll" plugin (build once,
+-- refresh on every show via Okanvil:ShowPanel's generic plugin dispatch).
+-- ------------------------------------------------------------
+local autoChk   -- bridges LootRoll_BuildUI's checkbox to LootRoll_Refresh below
+
+local function LootRoll_BuildUI(panel)
+	local X = 8
+	local hint = W.Text(panel, "A small floating window that pops when eligible loot drops -- start/award rolls without opening the big Loot page.", 10, "dim")
+	hint:SetPoint("TOPLEFT", X, -8); hint:SetPoint("RIGHT", panel, "RIGHT", -X, 0); hint:SetJustifyH("LEFT")
+
+	autoChk = W.Check(panel, "Auto-show on new loot",
+		function() return db().autoShow end,
+		function(v) db().autoShow = v and true or false end)
+	autoChk:SetPoint("TOPLEFT", X + 2, -42)
+
+	local openBtn = W.Button(panel, "Open Mini Roll Manager", "primary")
+	openBtn:SetSize(190, 26); openBtn:SetPoint("TOPLEFT", X, -76)
+	openBtn:SetScript("OnClick", function() RM.Toggle() end)
+end
+
+local function LootRoll_Refresh()
+	if autoChk and autoChk.refresh then autoChk.refresh() end
+end
+
+local lootrollLoginEv = CreateFrame("Frame")
+lootrollLoginEv:RegisterEvent("PLAYER_LOGIN")
+lootrollLoginEv:SetScript("OnEvent", function()
+	Okanvil_Plugins = Okanvil_Plugins or {}
+	Okanvil_Plugins["__lootroll"] = {
+		title = "Mini Roll Manager",
+		desc = "Floating loot-roll window: start/award rolls without opening the big Loot page.",
+		icon = Okanvil.ICONS.lootroll,
+		build = LootRoll_BuildUI,
+		refresh = LootRoll_Refresh,
+	}
+	if Okanvil.Register then Okanvil:Register("__lootroll") end
+end)

@@ -240,10 +240,10 @@ end
 -- ------------------------------------------------------------
 -- Nav list
 -- ------------------------------------------------------------
--- Built-in modules (rendered by the shell's own BuildInvite/Guild/Loot, not a
--- plugin build()). Listed here so they ALSO appear in the Modules manager and can
--- be toggled on/off exactly like the plugin modules. Home/Modules/Settings are the
--- fixed "core" and are never toggleable.
+-- Every module -- Recruit/IDs/Logs/RaidFinder/Guild/Invite/Loot/LootRoll -- registers
+-- the same way: it fills Okanvil_Plugins[key] and calls Okanvil:Register(key), landing
+-- in self.entries. There is no more native-vs-plugin distinction; Home/Modules/Settings
+-- are the fixed "core" shell pages and are never toggleable.
 -- One coherent icon set (all verified 3.3.5a paths). Keep the nav icon and the
 -- module's Dashboard header icon the SAME so the two never look mismatched.
 Okanvil.ICONS = {
@@ -251,14 +251,13 @@ Okanvil.ICONS = {
 	invite  = "Interface\\Icons\\Spell_ChargePositive",
 	guild   = "Interface\\Icons\\INV_Shirt_GuildTabard_01",
 	loot    = "Interface\\Icons\\INV_Misc_Coin_02",
+	lootroll= "Interface\\Icons\\INV_Misc_Dice_01",
 	logs    = "Interface\\Icons\\INV_Scroll_03",
 	ids     = "Interface\\Icons\\INV_Misc_Spyglass_02",
 	recruit = "Interface\\Icons\\Achievement_General_StayClassy",
 	modules = "Interface\\Icons\\INV_Misc_Gear_01",
 	settings= "Interface\\Icons\\Trade_Engineering",
 }
-
-Okanvil.NATIVE = {}
 
 -- Nav display order (top to bottom), by module TITLE. This is the ONE place to
 -- set where a module sits in the menu -- add a new feature's title here at the
@@ -278,11 +277,6 @@ function Okanvil:RefreshNav()
 	-- then emit them in a FIXED display order. Anything not in NAV_ORDER falls to
 	-- the end (alphabetical) so a new plugin still shows up.
 	local pool = {}
-	for _, m in ipairs(self.NATIVE) do
-		if self:IsModuleEnabled(m.key) then
-			pool[m.title] = { key = m.key, title = m.title, icon = m.icon }
-		end
-	end
 	for name in pairs(self.entries) do
 		if self:IsModuleEnabled(name) then
 			local t = self.entries[name].title or name
@@ -319,12 +313,8 @@ function Okanvil:RefreshNav()
 	end
 	self.navChild:SetHeight(math.max(1, y))
 	if self.footerCount then
-		-- count = built-in natives + registered plugins
+		-- count = registered modules (plugins)
 		local total, on = 0, 0
-		for _, m in ipairs(self.NATIVE) do
-			total = total + 1
-			if self:IsModuleEnabled(m.key) then on = on + 1 end
-		end
 		for name in pairs(self.entries) do
 			total = total + 1
 			if self:IsModuleEnabled(name) then on = on + 1 end
@@ -768,7 +758,7 @@ function Okanvil:BuildSettings()
 end
 
 -- ---- Settings: Options (single tab -- Appearance + Media + Branding stacked) ----
--- Loot capture/threshold settings live in the Loot module now (Okanvil:Loot_BuildSettings).
+-- Loot capture/threshold settings live in the Loot module now (Loot_BuildSettings in Loot.lua).
 function Okanvil:Settings_Options(p)
 	local db = self.db
 	local X = 4
@@ -841,7 +831,6 @@ function Okanvil:BuildModules()
 		footerHeight = 0,
 		statusText = function()
 			local on, total = 0, 0
-			for _, m in ipairs(Okanvil.NATIVE) do total = total + 1; if Okanvil:IsModuleEnabled(m.key) then on = on + 1 end end
 			for name in pairs(Okanvil.entries) do total = total + 1; if Okanvil:IsModuleEnabled(name) then on = on + 1 end end
 			return "|cff8a8d93" .. on .. "/" .. total .. " on|r"
 		end,
@@ -874,13 +863,10 @@ function Okanvil:BuildModules()
 	wrap.rows = {}
 	local function rebuild()
 		for _, r in ipairs(wrap.rows) do r:Hide() end
-		-- one unified list: built-in modules first (in NATIVE order), then plugins.
+		-- one unified list of every registered module, alphabetical by title.
 		-- Each item = { key, title, icon, desc } -- the key is what IsModuleEnabled
 		-- and the nav use.
 		local items = {}
-		for _, m in ipairs(Okanvil.NATIVE) do
-			items[#items + 1] = { key = m.key, title = m.title, icon = m.icon, desc = m.desc }
-		end
 		local names = {}
 		for name in pairs(Okanvil.entries) do names[#names + 1] = name end
 		table.sort(names, function(a, b)
